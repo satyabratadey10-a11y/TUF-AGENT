@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const tools = require('./tools.js');
 const api = require('./connection.js');
 
@@ -132,7 +132,6 @@ function safeJsonParse(text) {
     try { return _originalParse(text); } catch (e) {
         try {
             let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-            // Using \x60 to prevent mobile clipboard breakages on literal backticks
             cleaned = cleaned.replace(/\x60\x60\x60json/gi, '').replace(/\x60\x60\x60/g, '').trim();
             const start = cleaned.indexOf('{');
             const end = cleaned.lastIndexOf('}');
@@ -178,22 +177,46 @@ async function switchModelMenu() {
     return false;
 }
 
-// --- SWARM TOOLS ---
+// --- NATIVE MCP CAPABILITIES ---
 const agentTools = [...tools.schemas, 
 { 
     name: 'execute_command', description: 'Execute shell commands on the host OS.', 
     parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } 
 },
 {
-    name: 'spawn_sub_agent', description: 'Delegate a complex research, debugging, or planning sub-task to a specialized child AI to preserve your main context window.',
+    name: 'spawn_sub_agent', description: 'Delegate a complex task to a specialized child AI.',
     parameters: { 
         type: 'object', 
         properties: { 
-            role: { type: 'string', description: 'The persona of the child agent (e.g., Data Architect, Security Auditor, Coder)' }, 
-            task: { type: 'string', description: 'Highly detailed instructions for what the sub-agent needs to solve and return.' } 
+            role: { type: 'string', description: 'The persona of the child agent' }, 
+            task: { type: 'string', description: 'Instructions for the sub-agent' } 
         }, 
         required: ['role', 'task'] 
     }
+},
+{
+    name: 'mcp_network_bridge', description: 'Cross-platform connection. Fetch data from external APIs.',
+    parameters: { 
+        type: 'object', 
+        properties: { 
+            url: { type: 'string' }, 
+            method: { type: 'string', enum: ['GET', 'POST'] },
+            body: { type: 'string', description: 'JSON string for POST requests' }
+        }, 
+        required: ['url', 'method'] 
+    }
+},
+{
+    name: 'mcp_read_process_log', description: 'Read the output logs of a long-running background command.',
+    parameters: { type: 'object', properties: { log_path: { type: 'string' } }, required: ['log_path'] }
+},
+{
+    name: 'mcp_kill_process', description: 'Terminate a long-running background process using its PID.',
+    parameters: { type: 'object', properties: { pid: { type: 'string' } }, required: ['pid'] }
+},
+{
+    name: 'mcp_monitor_swarm', description: 'Read the raw reasoning logs of the last spawned sub-agent to see what it was thinking.',
+    parameters: { type: 'object', properties: { worker_role: { type: 'string' } }, required: ['worker_role'] }
 }];
 
 const SYSTEM_PROMPT = `You are an elite, autonomous AI Orchestrator running natively on Termux (Android/aarch64).
@@ -201,12 +224,12 @@ Available Tools: ${JSON.stringify(agentTools)}
 
 CORE OPERATING PROCEDURES:
 1. PLAN: Break the user's request into logical, discrete steps using the "task_manager". 
-2. DELEGATE (Swarm Protocol): If a task requires deep code analysis, independent research, or complex logic that would bloat your context window, use 'spawn_sub_agent' to hand it to a specialized worker.
-3. EXECUTE (Batching): Group multiple independent tool calls into a single response to save time and API requests.
-4. VERIFY: Do not blindly assume a command worked. Check the output before proceeding. If you write a file, you MUST verify it exists using 'ls' or 'cat' in your next step.
-5. TERMINATE (CRITICAL): Once the ultimate goal is achieved, you MUST immediately set "action" to "complete" and provide a final summary. DO NOT loop endlessly.
-6. FAIL-SAFE: If a tool fails 3 times in a row, set "action" to "complete" and explicitly ask the user for assistance.
-7. TOKEN CONSERVATION (CONDITIONAL REASONING): Do NOT generate <think> reasoning blocks for simple, repetitive, or obvious tasks (like creating basic files, routing commands, or simple conversational replies). ONLY use reasoning blocks for highly complex architectural planning or critical debugging. Skip the thought process whenever possible to save tokens.
+2. DELEGATE: Use 'spawn_sub_agent' for complex logic. Use 'mcp_monitor_swarm' if you need to read its deep thoughts afterward.
+3. EXECUTE: Group multiple independent tool calls into a single response.
+4. VERIFY: Do not blindly assume a command worked. Check the output before proceeding. If you write a file, you MUST verify it exists using 'ls' or 'cat'.
+5. TERMINATE: Once the ultimate goal is achieved, you MUST immediately set "action" to "complete" and provide a final summary.
+6. LONG TASKS: If you start a web server, it will detach and return a PID and log path. Use 'mcp_read_process_log' to check if it started successfully, then use 'mcp_kill_process' if instructed to stop it.
+7. TOKEN CONSERVATION: ONLY use <think> blocks for highly complex architectural planning.
 
 JSON SCHEMA ENFORCEMENT:
 You must strictly format your ENTIRE response as a valid JSON object. No raw markdown outside the JSON brackets.
@@ -219,7 +242,7 @@ You must strictly format your ENTIRE response as a valid JSON object. No raw mar
   },
   "action": "tool_call" | "complete",
   "calls": [{"tool": "tool_name", "args": {"arg_name": "value"}}], 
-  "result": "Final comprehensive output, summary, or question for the user (ONLY used if action is 'complete')"
+  "result": "Final output (ONLY used if action is 'complete')"
 }`;
 
 function saveAndExit() {
@@ -473,23 +496,33 @@ async function processNextInQueue() {
                         const ans = confirm.trim();
                         
                         if (ans.toLowerCase() === 'y' || ans.toLowerCase() === 'yes') {
-                            sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Executing (Async Background Support)...${colors.reset}`);
+                            sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Executing...${colors.reset}`);
                             try { 
                                 toolResult = await new Promise((resolve, reject) => {
                                     const childProcess = exec(call.args.command, { encoding: 'utf8', maxBuffer: 1024 * 1024 * 5 });
+                                    const logPath = path.join(SESSIONS_DIR, `bg_process_${childProcess.pid}.log`);
                                     let outputBuffer = "";
                                     let isDone = false;
+                                    let isDetached = false;
                                     
+                                    childProcess.stdout?.on('data', data => { 
+                                        outputBuffer += data; 
+                                        if (isDetached) fs.appendFileSync(logPath, data);
+                                    });
+                                    childProcess.stderr?.on('data', data => { 
+                                        outputBuffer += data; 
+                                        if (isDetached) fs.appendFileSync(logPath, data);
+                                    });
+
                                     const autoDetachTimer = setTimeout(() => {
                                         if (!isDone) {
                                             isDone = true;
+                                            isDetached = true;
+                                            fs.writeFileSync(logPath, outputBuffer); // Write initial buffer
                                             childProcess.unref(); 
-                                            resolve(outputBuffer + "\n[Process taking longer than 8 seconds. Detached and continuing safely in the background.]");
+                                            resolve(`[Detached] Process taking >8s. Running safely in background.\nPID: ${childProcess.pid}\nLog File: ${logPath}\nUse 'mcp_read_process_log' with {"log_path": "${logPath}"} to monitor output.`);
                                         }
                                     }, 8000); 
-
-                                    childProcess.stdout?.on('data', data => { outputBuffer += data; });
-                                    childProcess.stderr?.on('data', data => { outputBuffer += data; });
                                     
                                     childProcess.on('close', code => {
                                         if (!isDone) {
@@ -499,7 +532,6 @@ async function processNextInQueue() {
                                             else reject(new Error(`Exit status ${code}:\n${outputBuffer}`));
                                         }
                                     });
-                                    
                                     childProcess.on('error', err => {
                                         if (!isDone) {
                                             isDone = true;
@@ -527,12 +559,15 @@ async function processNextInQueue() {
                         spinner.update(`Worker [${call.args.role}] is active`);
                         
                         try {
-                            const workerPrompt = `You are an elite, specialized ${call.args.role} worker drone in a swarm framework. Your sole objective is: ${call.args.task}. Provide a raw, detailed, and highly actionable text report without JSON wrapping. Do NOT use <think> blocks. Just execute the task directly.`;
+                            const workerPrompt = `You are an elite, specialized ${call.args.role} worker drone in a swarm framework. Your sole objective is: ${call.args.task}. Provide a raw, detailed, and highly actionable text report without JSON wrapping. You MUST document your internal thoughts using <think> tags.`;
                             const subAgentResponse = await api.callAI({
                                 activeModel, chatHistory: [{ role: "user", content: call.args.task }], promptText: call.args.task, abortController: new AbortController(), spinner: { start: () => {}, stop: () => {}, update: () => {} }, sysLog: () => {}, colors, SYSTEM_PROMPT: workerPrompt
                             });
+                            
+                            fs.writeFileSync(path.join(SESSIONS_DIR, `worker_${call.args.role}.log`), subAgentResponse);
                             let cleanReport = subAgentResponse.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-                            toolResult = `[SWARM NODE REPORT: ${call.args.role}]\n${cleanReport}`;
+                            
+                            toolResult = `[SWARM NODE REPORT: ${call.args.role}]\n${cleanReport}\n\n[NOTE] Raw reasoning logs saved to ./sessions/worker_${call.args.role}.log. Use 'mcp_monitor_swarm' if you need to read the worker's deep thoughts.`;
                             spinner.stop(true);
                             sysLog(`${colors.yellow}+-- ${colors.green}✔ Worker Node Terminated (Data Received)${colors.reset}`);
                         } catch(e) {
@@ -540,6 +575,52 @@ async function processNextInQueue() {
                             toolResult = `[SWARM FATAL ERROR]: Worker node ${call.args.role} failed: ${e.message}`;
                             sysLog(`${colors.yellow}+-- ${colors.red}✖ Worker Node Failed${colors.reset}`);
                         }
+
+                    // --- NEW MCP CAPABILITY ENDPOINTS ---
+                    } else if (call.tool === 'mcp_network_bridge') {
+                        sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Bridging to external API: ${call.args.url}${colors.reset}`);
+                        try {
+                            const options = { method: call.args.method || 'GET' };
+                            if (call.args.method === 'POST' && call.args.body) {
+                                options.body = call.args.body;
+                                options.headers = { 'Content-Type': 'application/json' };
+                            }
+                            const res = await fetch(call.args.url, options);
+                            toolResult = await res.text();
+                            sysLog(`${colors.yellow}+-- ${colors.green}✔ Bridge Connection Successful${colors.reset}`);
+                        } catch(e) { 
+                            toolResult = `Bridge failed: ${e.message}`; 
+                            sysLog(`${colors.yellow}+-- ${colors.red}✖ Bridge Failed${colors.reset}`);
+                        }
+                    
+                    } else if (call.tool === 'mcp_read_process_log') {
+                        sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Fetching log: ${call.args.log_path}${colors.reset}`);
+                        try {
+                            if (fs.existsSync(call.args.log_path)) {
+                                const fullLog = fs.readFileSync(call.args.log_path, 'utf8');
+                                toolResult = fullLog.length > 2500 ? "...[TRUNCATED]...\n" + fullLog.slice(-2500) : fullLog;
+                            } else { toolResult = "Error: Log file does not exist."; }
+                            sysLog(`${colors.yellow}+-- ${colors.green}✔ Log Retrieved${colors.reset}`);
+                        } catch(e) { toolResult = e.message; }
+
+                    } else if (call.tool === 'mcp_kill_process') {
+                        sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Terminating PID: ${call.args.pid}${colors.reset}`);
+                        try {
+                            execSync(`kill -9 ${call.args.pid}`);
+                            toolResult = `Successfully killed process ${call.args.pid}`;
+                            sysLog(`${colors.yellow}+-- ${colors.green}✔ Process Terminated${colors.reset}`);
+                        } catch(e) { toolResult = `Failed to kill process: ${e.message}`; }
+
+                    } else if (call.tool === 'mcp_monitor_swarm') {
+                        const targetLog = path.join(SESSIONS_DIR, `worker_${call.args.worker_role}.log`);
+                        if (fs.existsSync(targetLog)) {
+                            toolResult = fs.readFileSync(targetLog, 'utf8');
+                            sysLog(`${colors.yellow}+-- ${colors.green}✔ Swarm Memory Retrieved${colors.reset}`);
+                        } else {
+                            toolResult = `No logs found for worker role: ${call.args.worker_role}`;
+                        }
+                    // ------------------------------------
+
                     } else {
                         sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Executing API Tool...${colors.reset}`);
                         spinner.start();

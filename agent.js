@@ -132,8 +132,8 @@ function safeJsonParse(text) {
     try { return _originalParse(text); } catch (e) {
         try {
             let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-            cleaned = cleaned.replace(/```json/gi, '').replace(/
-```/g, '').trim();
+            // Using \x60 to prevent mobile clipboard breakages on literal backticks
+            cleaned = cleaned.replace(/\x60\x60\x60json/gi, '').replace(/\x60\x60\x60/g, '').trim();
             const start = cleaned.indexOf('{');
             const end = cleaned.lastIndexOf('}');
             if (start !== -1 && end !== -1 && start < end) {
@@ -272,7 +272,7 @@ async function handleSlashCommand(cmd) {
             const isNowSpinning = spinner.timer !== null;
             if (isNowSpinning) spinner.stop(true);
             let cleanSideResponse = rawResponse.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-            cleanSideResponse = cleanSideResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+            cleanSideResponse = cleanSideResponse.replace(/\x60\x60\x60json/gi, '').replace(/\x60\x60\x60/g, '').trim();
             if (cleanSideResponse.startsWith('{') && cleanSideResponse.endsWith('}')) {
                 const parsed = safeJsonParse(cleanSideResponse);
                 if (parsed && parsed.result) cleanSideResponse = parsed.result;
@@ -441,7 +441,7 @@ async function processNextInQueue() {
             
             const parsed = safeJsonParse(rawResponse);
             if (!parsed) {
-                let fallbackText = rawResponse.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/```json/gi, '').replace(/```/g, '').trim();
+                let fallbackText = rawResponse.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/\x60\x60\x60json/gi, '').replace(/\x60\x60\x60/g, '').trim();
                 sysLog(`\n${colors.bold}${colors.green}+-- ◆ AI (Raw Output) ───────────────────${colors.reset}`);
                 await sysLogAnimated(fallbackText, `${colors.green}|${colors.reset} `);
                 sysLog(`${colors.bold}${colors.green}\\----------------------------------------${colors.reset}`);

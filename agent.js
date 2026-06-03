@@ -177,7 +177,7 @@ async function switchModelMenu() {
     return false;
 }
 
-// --- NATIVE MCP CAPABILITIES ---
+// --- CORE TOOLS & CAPABILITIES ---
 const agentTools = [...tools.schemas, 
 { 
     name: 'execute_command', description: 'Execute shell commands on the host OS.', 
@@ -217,20 +217,55 @@ const agentTools = [...tools.schemas,
 {
     name: 'mcp_monitor_swarm', description: 'Read the raw reasoning logs of the last spawned sub-agent to see what it was thinking.',
     parameters: { type: 'object', properties: { worker_role: { type: 'string' } }, required: ['worker_role'] }
+},
+{
+    name: 'update_core_memory', description: 'Update the persistent global memory file (imp_memo.md). Use this to securely remember feature lists, documentation logic, or core skills across sessions.',
+    parameters: { 
+        type: 'object', 
+        properties: { 
+            content: { type: 'string', description: 'The textual memory, rules, or documentation to store.' },
+            mode: { type: 'string', enum: ['append', 'overwrite'], description: 'Whether to add to the existing file or replace it completely.' }
+        }, 
+        required: ['content', 'mode'] 
+    }
 }];
 
-const SYSTEM_PROMPT = `You are an elite, autonomous AI Orchestrator running natively on Termux (Android/aarch64).
+// --- DYNAMIC CONTEXT INJECTION ---
+function getSystemPrompt() {
+    let globalMemory = "";
+    if (fs.existsSync('imp_memo.md')) {
+        globalMemory = `\n\n=== PERSISTENT CORE MEMORY (imp_memo.md) ===\nBelow are strictly enforced features, rules, and global memory for this project. Always apply these guidelines:\n${fs.readFileSync('imp_memo.md', 'utf8')}\n============================================\n`;
+    }
+
+    let availableSkills = "";
+    if (fs.existsSync('./skills')) {
+        const files = fs.readdirSync('./skills').filter(f => f.endsWith('.md'));
+        if (files.length > 0) {
+            availableSkills = `\n\n=== AVAILABLE SKILL ARCHIVES ===\nThe following specialized skill files exist in ./skills/: [${files.join(', ')}]\n`;
+        }
+    }
+
+    let experienceMemory = "";
+    if (fs.existsSync('experience.md')) {
+        experienceMemory = `\n\n=== AGENTIC EXPERIENCE & LESSONS LEARNED ===\nYou have autonomously learned the following rules from past mistakes. NEVER repeat past errors. Apply these heuristics to your current task:\n${fs.readFileSync('experience.md', 'utf8')}\n============================================\n`;
+    }
+
+    return `You are an elite, autonomous AI Orchestrator running natively on Termux (Android/aarch64).
 Available Tools: ${JSON.stringify(agentTools)}
 
 CORE OPERATING PROCEDURES:
-1. PLAN: Break the user's request into logical, discrete steps using the "task_manager". 
-2. DELEGATE: Use 'spawn_sub_agent' for complex logic. Use 'mcp_monitor_swarm' if you need to read its deep thoughts afterward.
-3. EXECUTE: Group multiple independent tool calls into a single response.
-4. VERIFY: Do not blindly assume a command worked. Check the output before proceeding. If you write a file, you MUST verify it exists using 'ls' or 'cat'.
-5. TERMINATE: Once the ultimate goal is achieved, you MUST immediately set "action" to "complete" and provide a final summary.
-6. LONG TASKS: If you start a web server, it will detach and return a PID and log path. Use 'mcp_read_process_log' to check if it started successfully, then use 'mcp_kill_process' if instructed to stop it.
-7. TOKEN CONSERVATION: ONLY use <think> blocks for highly complex architectural planning.
-
+1. SKILL ROUTING: Check the AVAILABLE SKILL ARCHIVES list below. If the user's task heavily relies on a framework or design listed there, you MUST use 'execute_command' to run 'cat ./skills/<filename>' and read those rules BEFORE planning or writing code.
+2. PLAN: Break the user's request into logical, discrete steps using the "task_manager". 
+3. DELEGATE: Use 'spawn_sub_agent' for complex logic. Use 'mcp_monitor_swarm' if you need to read its deep thoughts afterward.
+4. EXECUTE: Group multiple independent tool calls into a single response.
+5. SELF-HEALING BUILD PROTOCOL: If you execute a build command (like javac, g++, cmake, gradle) and it returns an error, DO NOT stop. Autonomously analyze the stack trace, modify the source files to fix the bug, and re-run the build command. Make at least two attempts to fix compilation errors before setting action to 'complete'.
+6. VERIFY: Do not blindly assume a command worked. Check the output before proceeding. If you write a file, verify it exists.
+7. LONG TASKS: If you start a web server, it will detach and return a PID. Use 'mcp_read_process_log' to monitor it.
+8. GLOBAL MEMORY: Use 'update_core_memory' to write persistent rules to 'imp_memo.md'.
+9. SELF-IMPROVEMENT (CRITICAL): When you set action to "complete", you must evaluate your performance. If you encountered errors, had to retry commands, or found a better workflow, you MUST extract a highly specific technical rule and place it in the "lessons_learned" array.
+10. TERMINATE: Once the ultimate goal is achieved, you MUST immediately set "action" to "complete".
+11. TOKEN CONSERVATION: ONLY use <think> blocks for complex architectural planning or bug fixing.
+${globalMemory}${availableSkills}${experienceMemory}
 JSON SCHEMA ENFORCEMENT:
 You must strictly format your ENTIRE response as a valid JSON object. No raw markdown outside the JSON brackets.
 
@@ -242,8 +277,10 @@ You must strictly format your ENTIRE response as a valid JSON object. No raw mar
   },
   "action": "tool_call" | "complete",
   "calls": [{"tool": "tool_name", "args": {"arg_name": "value"}}], 
-  "result": "Final output (ONLY used if action is 'complete')"
+  "result": "Final output (ONLY used if action is 'complete')",
+  "lessons_learned": ["Specific technical rule to avoid past mistakes (ONLY if applicable)"]
 }`;
+}
 
 function saveAndExit() {
     spinner.start();
@@ -330,8 +367,10 @@ async function handleSlashCommand(cmd) {
         sysLog(`${colors.cyan}|${colors.reset} Engine: ${colors.yellow}${activeModel.name}${colors.reset}`);
         sysLog(`${colors.cyan}|${colors.reset} Endpoint: ${colors.dim}${activeModel.baseUrl || "Default Google"}${colors.reset}`);
         sysLog(`${colors.cyan}|${colors.reset} Queue: ${promptQueue.length > 0 ? colors.yellow + promptQueue.length + " pending" : colors.green + "Empty"}${colors.reset}`);
+        sysLog(`${colors.cyan}|${colors.reset} Imp_Memo: ${fs.existsSync('imp_memo.md') ? colors.green + "Active" : colors.dim + "None"}${colors.reset}`);
+        sysLog(`${colors.cyan}|${colors.reset} Experience: ${fs.existsSync('experience.md') ? colors.green + "Learning" : colors.dim + "Fresh"}${colors.reset}`);
         sysLog(`${colors.bold}${colors.cyan}\\----------------------------------------${colors.reset}`);
-    } else if (base === '/instructions') { sysLog(`${colors.bold}${colors.cyan}--- Base Instructions ---${colors.reset}\n${SYSTEM_PROMPT}`);
+    } else if (base === '/instructions') { sysLog(`${colors.bold}${colors.cyan}--- Base Instructions ---${colors.reset}\n${getSystemPrompt()}`);
     } else if (base === '/skills') {
         sysLog(`${colors.bold}${colors.cyan}+-- Installed Skills --------------------${colors.reset}`);
         if (!fs.existsSync('./skills')) fs.mkdirSync('./skills');
@@ -450,7 +489,14 @@ async function processNextInQueue() {
         
         try {
             const rawResponse = await api.callAI({
-                activeModel, chatHistory, promptText: aiPrompt, abortController, spinner, sysLog, colors, SYSTEM_PROMPT
+                activeModel, 
+                chatHistory, 
+                promptText: aiPrompt, 
+                abortController, 
+                spinner, 
+                sysLog, 
+                colors, 
+                SYSTEM_PROMPT: getSystemPrompt()
             });
             spinner.stop(true);
             if (cancelWork) break;
@@ -496,7 +542,7 @@ async function processNextInQueue() {
                         const ans = confirm.trim();
                         
                         if (ans.toLowerCase() === 'y' || ans.toLowerCase() === 'yes') {
-                            sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Executing...${colors.reset}`);
+                            sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Executing (Async Background Support)...${colors.reset}`);
                             try { 
                                 toolResult = await new Promise((resolve, reject) => {
                                     const childProcess = exec(call.args.command, { encoding: 'utf8', maxBuffer: 1024 * 1024 * 5 });
@@ -518,7 +564,7 @@ async function processNextInQueue() {
                                         if (!isDone) {
                                             isDone = true;
                                             isDetached = true;
-                                            fs.writeFileSync(logPath, outputBuffer); // Write initial buffer
+                                            fs.writeFileSync(logPath, outputBuffer); 
                                             childProcess.unref(); 
                                             resolve(`[Detached] Process taking >8s. Running safely in background.\nPID: ${childProcess.pid}\nLog File: ${logPath}\nUse 'mcp_read_process_log' with {"log_path": "${logPath}"} to monitor output.`);
                                         }
@@ -559,7 +605,7 @@ async function processNextInQueue() {
                         spinner.update(`Worker [${call.args.role}] is active`);
                         
                         try {
-                            const workerPrompt = `You are an elite, specialized ${call.args.role} worker drone in a swarm framework. Your sole objective is: ${call.args.task}. Provide a raw, detailed, and highly actionable text report without JSON wrapping. You MUST document your internal thoughts using <think> tags.`;
+                            const workerPrompt = `You are an elite, specialized ${call.args.role} worker drone in a swarm framework. Your sole objective is: ${call.args.task}. Provide a raw, detailed, and highly actionable text report without JSON wrapping. You MUST document your internal thoughts using <think> tags.\n${fs.existsSync('imp_memo.md') ? "CORE MEMORY FOR CONTEXT:\n" + fs.readFileSync('imp_memo.md', 'utf8') : ""}`;
                             const subAgentResponse = await api.callAI({
                                 activeModel, chatHistory: [{ role: "user", content: call.args.task }], promptText: call.args.task, abortController: new AbortController(), spinner: { start: () => {}, stop: () => {}, update: () => {} }, sysLog: () => {}, colors, SYSTEM_PROMPT: workerPrompt
                             });
@@ -576,7 +622,22 @@ async function processNextInQueue() {
                             sysLog(`${colors.yellow}+-- ${colors.red}✖ Worker Node Failed${colors.reset}`);
                         }
 
-                    // --- NEW MCP CAPABILITY ENDPOINTS ---
+                    } else if (call.tool === 'update_core_memory') {
+                        sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Writing to imp_memo.md...${colors.reset}`);
+                        try {
+                            const memoPath = 'imp_memo.md';
+                            if (call.args.mode === 'append' && fs.existsSync(memoPath)) {
+                                fs.appendFileSync(memoPath, '\n\n' + call.args.content);
+                            } else {
+                                fs.writeFileSync(memoPath, call.args.content);
+                            }
+                            toolResult = `Successfully updated imp_memo.md in ${call.args.mode} mode. These changes are now permanently injected into the Global System Context.`;
+                            sysLog(`${colors.yellow}+-- ${colors.green}✔ Global Core Memory Updated${colors.reset}`);
+                        } catch(e) { 
+                            toolResult = `Failed to write memory: ${e.message}`; 
+                            sysLog(`${colors.yellow}+-- ${colors.red}✖ Write Error${colors.reset}`);
+                        }
+
                     } else if (call.tool === 'mcp_network_bridge') {
                         sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Bridging to external API: ${call.args.url}${colors.reset}`);
                         try {
@@ -619,7 +680,6 @@ async function processNextInQueue() {
                         } else {
                             toolResult = `No logs found for worker role: ${call.args.worker_role}`;
                         }
-                    // ------------------------------------
 
                     } else {
                         sysLog(`${colors.yellow}|${colors.reset}  ${colors.dim}Executing API Tool...${colors.reset}`);
@@ -646,6 +706,19 @@ async function processNextInQueue() {
                 chatHistory.push({ role: "system", content: aiPrompt });
                 
             } else if (parsed.action === "complete") {
+                
+                // SELF IMPROVEMENT EVALUATION TRIGGER
+                if (parsed.lessons_learned && Array.isArray(parsed.lessons_learned) && parsed.lessons_learned.length > 0) {
+                    sysLog(`\n${colors.bold}${colors.magenta}+-- 🧠 Self-Improvement Engine Triggered ${colors.reset}`);
+                    let lessonsFormatted = "";
+                    parsed.lessons_learned.forEach(lesson => {
+                        sysLog(`${colors.magenta}|${colors.reset}  ${colors.dim}Learned: ${lesson}${colors.reset}`);
+                        lessonsFormatted += `- ${lesson}\n`;
+                    });
+                    fs.appendFileSync('experience.md', lessonsFormatted);
+                    sysLog(`${colors.bold}${colors.magenta}\\----------------------------------------${colors.reset}`);
+                }
+
                 sysLog(`\n${colors.bold}${colors.green}+-- ◆ AI --------------------------------${colors.reset}`);
                 await sysLogAnimated(parsed.result, `${colors.green}|${colors.reset}  `);
                 sysLog(`${colors.bold}${colors.green}\\----------------------------------------${colors.reset}`);

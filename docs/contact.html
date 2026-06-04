@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us - AxilO-AGENT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0f172a',
+                        secondary: '#1e293b',
+                        accent: '#38bdf8'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-primary text-slate-300 font-sans min-h-screen flex flex-col">
+    <!-- Navigation Bar -->
+    <nav class="sticky top-0 z-50 bg-primary/90 backdrop-blur-md border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex-shrink-0 flex items-center">
+                    <a href="index.html" class="font-bold text-xl text-white tracking-wider">&gt;_ AxilO<span class="text-accent">AGENT</span></a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-3xl mx-auto px-4 py-16 w-full">
+        <div class="text-center mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">Contact Support</h1>
+            <p class="text-slate-400">Have a question or need assistance with the AxilO-AGENT framework? Reach out to us below.</p>
+        </div>
+        
+        <div class="bg-secondary border border-slate-800 rounded-xl p-8 shadow-xl">
+            <form action="#" method="POST" class="space-y-6">
+                <div>
+                    <label for="name" class="block text-sm font-medium text-slate-300 mb-2">Name</label>
+                    <input type="text" id="name" name="name" class="w-full bg-primary border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors" placeholder="Your full name" required>
+                </div>
+                
+                <div>
+                    <label for="email" class="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+                    <input type="email" id="email" name="email" class="w-full bg-primary border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors" placeholder="you@example.com" required>
+                </div>
+                
+                <div>
+                    <label for="subject" class="block text-sm font-medium text-slate-300 mb-2">Subject</label>
+                    <input type="text" id="subject" name="subject" class="w-full bg-primary border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors" placeholder="How can we help?" required>
+                </div>
+                
+                <div>
+                    <label for="message" class="block text-sm font-medium text-slate-300 mb-2">Message</label>
+                    <textarea id="message" name="message" rows="5" class="w-full bg-primary border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors resize-y" placeholder="Describe your issue or inquiry in detail..." required></textarea>
+                </div>
+                
+                <button type="submit" class="w-full bg-accent hover:bg-sky-400 text-slate-900 font-bold py-3 px-4 rounded-lg transition-colors shadow-lg hover:shadow-accent/30">
+                    Send Message
+                </button>
+            </form>
+        </div>
+        
+        <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6 text-center">
+            <div class="bg-secondary/50 border border-slate-800 rounded-lg p-6">
+                <svg class="w-8 h-8 text-accent mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                <h3 class="text-white font-medium mb-2">GitHub Issues</h3>
+                <p class="text-sm text-slate-400 mb-4">Report bugs or request features on our repository.</p>
+                <a href="https://github.com/satyabratadey10-a11y/AxilO-AGENT/issues" target="_blank" class="text-accent hover:underline text-sm font-medium">Open an Issue &rarr;</a>
+            </div>
+            
+            <div class="bg-secondary/50 border border-slate-800 rounded-lg p-6">
+                <svg class="w-8 h-8 text-accent mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                <h3 class="text-white font-medium mb-2">Direct Email</h3>
+                <p class="text-sm text-slate-400 mb-4">For privacy concerns or specific business inquiries.</p>
+                <a href="mailto:support@example.com" class="text-accent hover:underline text-sm font-medium">support@example.com &rarr;</a>
+            </div>
+        </div>
+    </main>
+
+    <!-- <!-- AdSense Placeholder: Bottom Banner --> -->
+    <div class="w-full max-w-4xl mx-auto px-4 mb-8">
+        <div class="w-full h-[90px] bg-slate-800/50 border border-slate-700/50 rounded-lg flex items-center justify-center text-slate-500 text-sm italic">Advertisement Placeholder</div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 border-t border-slate-800 py-8">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-slate-500 text-sm">&copy; <script>document.write(new Date().getFullYear())</script> AxilO-AGENT. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

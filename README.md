@@ -1,119 +1,102 @@
 # AxilO AGENT
 
-AxilO AGENT is a Node.js + TypeScript AI agent runtime designed for terminal-first workflows and headless integrations. It provides a polished CLI experience, model profile management, session persistence, and a pluggable tool system so you can build and operate tool-using assistants locally or behind an API.
+AxilO AGENT is an elite, autonomous AI Orchestrator and runtime engineered for terminal-first workflows, swarm delegation, and native execution on Termux (Android/aarch64) and standard POSIX environments.
+
+The architecture is hidden entirely within a global home directory configuration (`~/.axilo/`), enabling zero-trail execution from any current workspace path without duplicating files or breaking relative dependencies.
 
 ## Highlights
 
-- **Interactive CLI** with guided prompts, slash commands, and local history persistence.
-- **Headless REST API** for embedding the agent in other services.
-- **Model profiles** stored locally (no hard-coded credentials).
-- **Extensible tools** in `tools.js` with safe execution gates.
-- **TypeScript core** in `src/` compiled to `dist/` for runtime stability.
+- **Hidden System Core:** Entire orchestration stack resides globally in `~/.axilo/` to keep your active workspace directories immaculate.
 
-## Requirements
+- **Global Flag Injection:** Single-command global `axilo` utility with native routing flags (`--add-model`, `--delete-model`, `--clear-sessions`).
 
-- Node.js 18+
-- npm
-- Python 3 + pip (optional, for helper scripts such as `litert_engine.py`)
-- ffmpeg/ffprobe (optional, for media tools exposed by `tools.js`)
+- **Interactive Multi-Turn Engine:** Self-contained terminal layout featuring deterministic low-temperature processing (`0.3`), greeting bypass channels, and a fail-safe streaming validator for incoming chunk pipelines.
 
-## Installation
+- **Swarm & Tool Delegation:** Pluggable schema-based tool execution layer featuring recursive background compilation monitoring, self-healing builds, child sub-agent spawning, and detached process lifecycle handling.
 
-### Automated setup
+- **Universal Provider Compliance:** Built-in history payload restructuring to ensure strict alternating role arrays to satisfy strict remote gateway formatting requirements.
 
-```bash
-git clone github.com/satyabratadey10-a11y/AxilO-AGENT.git
-cd AxilO-AGENT
-chmod +x AxilO
-./AxilO
-```
+## Architecture & Project Layout
 
-### Manual setup
+The framework hides its components within the root configuration layer to enable zero-leak execution:
 
-```bash
-npm install
-npx tsc
-python3 -m pip install -r requirements.txt
-```
+| Global Path | Purpose |
+|-------------|---------|
+| `$PREFIX/bin/axilo` | Global binary shortcut script managing routing flags and running from current path |
+| `~/.axilo/agent.js` | Main Orchestrator, terminal loop, and tool execution system |
+| `~/.axilo/connection.js` | Universal API gateway layer with streaming choice hooks |
+| `~/.axilo/add_model.js` | Interactive console wizard requesting full API credentials |
+| `~/.axilo/del_model.js` | Interactive indexed listing selection panel for quick core drops |
+| `~/.axilo/tools.js` | Modular tool schema execution registry |
+| `~/.axilo/skills/` | Markdown archive tracking ingested design rules and platform guidelines |
+| `~/.axilo/sessions/` | Workspace directory maintaining runtime multi-turn historical logs |
+| `~/.axilo/imp_memo.md` | Persistent global memory injected directly into the system context |
+| `~/.axilo/experience.md` | Self-improvement engine tracking automated lessons learned |
 
-## Configure a model profile
+## Global Command Usage
 
-Run the profile wizard to create `models.json`:
+The wrapper script tracks flag commands directly from your terminal cursor, independent of your active working directory.
 
-```bash
-node add_model.js
-```
+### 1. Launch the Runtime Conductor
 
-You can remove profiles with:
+Boot up the interactive orchestrator loop directly from your current workspace:
 
 ```bash
-node del_model.js
+axilo
 ```
 
-## Run the CLI
+2. Interactive Model Credential Addition
 
-Start the interactive terminal agent:
+Launches the wizard to securely input Name, ID, custom Base Endpoint URL, API Keys, and token ceilings directly into the encrypted global scope:
 
 ```bash
-node agent.js
+axilo --add-model
 ```
 
-This repository includes `agent.js` in the root as the CLI entry point. It loads your model profiles, prompts you to select a model, and stores chat history in `history.json`.
+3. Interactive Model Core Drop
 
-## Run the headless API server
-
-Build the TypeScript sources (if you have not already):
+Brings up a numerical selector from 1 to Max to safely drop specific configuration indices:
 
 ```bash
-npx tsc
+axilo --delete-model
 ```
 
-Start the API server:
+4. Purge All Cached Contexts
+
+Instantly cleans out the workspace trace files, wiping out old or uninitialized session tracking blocks:
 
 ```bash
-node server.js
+axilo --clear-sessions
 ```
 
-`server.js` runs the headless runtime backed by the compiled TypeScript core in `dist/`. The server listens on **http://127.0.0.1:8080** (change the `PORT` constant in `server.js` to customize) and persists sessions in `sessions.json`. It exposes:
+System Configurations & Fail-Safes
 
-- `POST /api/chat` — send a prompt (and optional `sessionId`).
-- `POST /api/approve` — approve or deny tool calls that require human consent.
+Stream Disconnection Shield
 
-## Customize tools
+The streaming channel validates incoming text chunks securely inside connection.js:
 
-Edit `tools.js` to add or update tool schemas and execution logic. The API server reloads this file when a tool call executes, and will keep the last valid tool set if a syntax error is detected.
+```javascript
+if (chunk && chunk.choices &&
+    chunk.choices[0] && chunk.choices[0].delta) {
+  const content = chunk.choices[0].delta.content || "";
+  fulltext += content;
+}
+```
 
-## Local data files
+This blocks empty API frames from causing a system exception when remote streaming socket pipelines drop unexpectedly.
 
-AxilO AGENT keeps runtime state in local JSON files that are intentionally gitignored:
+Role Alternation Array Flattening
 
-- `models.json` — model profiles and API credentials
-- `history.json` — CLI chat history
-- `sessions.json` — API server session storage
+To comply with strict multi-turn validation structures, historical message arrays are automatically parsed into alternating sequences:
 
-## Optional demo UI
+```
+[System Instruction] + [User Prompt] ⇢ [Assistant Output] + [User Prompt]
+```
 
-The `chat_app/` folder contains a minimal WebSocket demo UI and server for experimentation. It is standalone and not wired to the REST API server. To try it, run `node chat_app/server.js` and open `chat_app/index.html` in a browser. Note: the demo server also binds to port 8080. Stop the REST API server or change one of the ports to avoid conflicts. Update `server.js` for the REST API port or `chat_app/server.js` for the demo port.
+Any consecutive tracking indices of matching roles are cleanly combined to guarantee zero-fault query validation passes regardless of the backend endpoint provider.
 
-## Project layout
+Troubleshooting
 
-| Path | Purpose |
-| --- | --- |
-| `agent.js` | Interactive CLI runtime |
-| `server.js` | Headless REST API server |
-| `add_model.js` / `del_model.js` | Model profile management |
-| `tools.js` | Tool schema + execution registry |
-| `src/` | TypeScript source for the core agent |
-| `dist/` | Compiled runtime output |
-| `chat_app/` | Standalone WebSocket demo UI |
-
-## Security notes
-
-- `models.json`, `history.json`, and `sessions.json` are intentionally gitignored.
-- Store API keys only in local profile files and rotate them as needed.
-
-## Troubleshooting
-
-- **No profiles found:** run `node add_model.js` first.
-- **Build output missing:** run `npx tsc` and confirm `dist/` exists.
-- **Python tool errors:** install Python dependencies with `python3 -m pip install -r requirements.txt`.
+· Module Not Found Errors: If the system complains about missing dependencies, execute npm install openai inside the ~/.axilo home layer.
+· Empty File Generation Logs: Ensure your agent models are configured to run with structured JSON syntax payloads. If an endpoint drops the format, check the terminal trace boards to locate the target logs.
+· Environment API Dropouts: If the server returns empty payloads or authorization failures, confirm that your target shell environment variables hold active authentication values for your chosen API provider.
